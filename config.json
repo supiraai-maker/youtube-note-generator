@@ -1,0 +1,11 @@
+{
+  "ffmpegPath": "C:/Users/110ry/ffmpeg/bin/ffmpeg.exe",
+  "workDir": "work",
+  "outputDir": "output",
+  "frameFormat": "jpg",
+  "frameQuality": 2,
+  "claudeModel": "claude-sonnet-4-6",
+  "maxExamplesInPrompt": 2,
+  "maxExamplesStored": 10,
+  "base64SizeLimitMB": 3
+}
