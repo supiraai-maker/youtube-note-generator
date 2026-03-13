@@ -10,7 +10,7 @@
     "article": "node scripts/generate-article.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.52.0",
+    "@google/generative-ai": "^0.24.1",
     "clipboardy": "^4.0.0",
     "dotenv": "^17.3.1"
   }

@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const TEMPLATES_DIR = path.join(__dirname, '../templates');
 const EXAMPLES_DIR = path.join(TEMPLATES_DIR, 'examples');
@@ -26,7 +26,7 @@ function loadExamples(maxCount) {
 }
 
 /**
- * Anthropic Claude API で note.com 記事を生成する
+ * Gemini 2.5 Flash で note.com 記事を生成する
  * @param {object[]} chapters - parseDescriptionの出力
  * @param {object[]} frames - extractFramesの出力
  * @param {string} transcript - YouTube字幕テキスト（空文字でも可）
@@ -34,7 +34,15 @@ function loadExamples(maxCount) {
  * @returns {string} - 生成されたMarkdown記事
  */
 async function generateArticle(chapters, frames, transcript, config) {
-  const client = new Anthropic();
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: config.geminiModel || 'gemini-2.5-flash',
+    generationConfig: {
+      temperature: 0.7,
+      topP: 0.9,
+      maxOutputTokens: 8192,
+    },
+  });
 
   const promptTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'article-prompt.txt'), 'utf-8');
   const styleGuide = fs.readFileSync(path.join(TEMPLATES_DIR, 'style-guide.md'), 'utf-8');
@@ -68,15 +76,10 @@ async function generateArticle(chapters, frames, transcript, config) {
     .replace('{{STYLE_GUIDE}}', styleGuide)
     .replace('{{EXAMPLES}}', examplesText);
 
-  console.log('  🤖 Claude API に記事生成を依頼中...');
+  console.log('  🤖 Gemini 2.5 Flash に記事生成を依頼中...');
 
-  const message = await client.messages.create({
-    model: config.claudeModel || 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  return message.content[0].text;
+  const result = await model.generateContent(prompt);
+  return result.response.text();
 }
 
 module.exports = { generateArticle };

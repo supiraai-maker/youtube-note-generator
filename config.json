@@ -5,7 +5,7 @@
   "outputDir": "output",
   "frameFormat": "jpg",
   "frameQuality": 2,
-  "claudeModel": "claude-sonnet-4-6",
+  "geminiModel": "gemini-2.5-flash",
   "maxExamplesInPrompt": 2,
   "maxExamplesStored": 10,
   "base64SizeLimitMB": 3
