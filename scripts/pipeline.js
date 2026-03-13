@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { parseDescription } = require('./parse-description');
+const { fetchTranscript } = require('./fetch-transcript');
 const { extractFrames } = require('./extract-frames');
 const { generateArticle } = require('./generate-article');
 const { formatOutput } = require('./format-output');
@@ -27,6 +28,7 @@ async function main() {
 
   const workDir = path.resolve(ROOT, workDirOverride || config.workDir);
   const descriptionPath = path.join(workDir, 'description.txt');
+  const urlPath = path.join(workDir, 'url.txt');
   const videoPath = path.join(workDir, 'video.mp4');
 
   console.log('\n🎬 YouTube → note 記事生成パイプライン\n');
@@ -37,35 +39,53 @@ async function main() {
     console.error('   → work/ フォルダに description.txt を置いてください');
     process.exit(1);
   }
+  if (!fs.existsSync(urlPath)) {
+    console.error(`❌ url.txt が見つかりません: ${urlPath}`);
+    console.error('   → work/ フォルダに url.txt（YouTube URL）を置いてください');
+    process.exit(1);
+  }
   if (!fs.existsSync(videoPath)) {
     console.error(`❌ video.mp4 が見つかりません: ${videoPath}`);
     console.error('   → work/ フォルダに video.mp4 を置いてください');
     process.exit(1);
   }
 
+  const youtubeUrl = fs.readFileSync(urlPath, 'utf-8').trim();
+
   // Step 1: チャプター解析
   console.log('📋 Step 1: チャプター解析...');
   const chapters = parseDescription(descriptionPath);
   console.log(`   ✅ ${chapters.length}件のチャプターを検出\n`);
 
-  // Step 2: フレーム抽出
+  // Step 2: 字幕取得
+  console.log('📝 Step 2: YouTube字幕取得（yt-dlp）...');
+  let transcript = '';
+  try {
+    transcript = fetchTranscript(youtubeUrl, config);
+    console.log(`   ✅ 字幕取得完了（${transcript.length}文字）\n`);
+  } catch (err) {
+    console.warn(`   ⚠️  字幕取得失敗: ${err.message}`);
+    console.warn('   → チャプタータイトルのみで記事を生成します\n');
+  }
+
+  // Step 3: フレーム抽出
   const outputTimestamp = getTimestamp();
   const outputDir = path.join(ROOT, config.outputDir, outputTimestamp);
   const imagesDir = path.join(outputDir, 'images');
   fs.mkdirSync(imagesDir, { recursive: true });
 
-  console.log('🖼️  Step 2: フレーム抽出...');
+  console.log('🖼️  Step 3: フレーム抽出...');
   const frames = extractFrames(chapters, videoPath, imagesDir, config);
   const successCount = frames.filter(f => f.success).length;
   console.log(`   ✅ ${successCount}/${chapters.length}件のフレームを抽出\n`);
 
-  // Step 3: 記事生成
-  console.log('✍️  Step 3: 記事生成（Claude API）...');
-  const articleMd = await generateArticle(chapters, frames, config);
+  // Step 4: 記事生成
+  console.log('✍️  Step 4: 記事生成（Claude API）...');
+  const articleMd = await generateArticle(chapters, frames, transcript, config);
   console.log('   ✅ 記事生成完了\n');
 
-  // Step 4: 出力フォーマット & クリップボード
-  console.log('📤 Step 4: クリップボードにコピー...');
+  // Step 5: 出力フォーマット & クリップボード
+  console.log('📤 Step 5: クリップボードにコピー...');
   const { method, outputPath } = await formatOutput(articleMd, imagesDir, outputDir, config);
   console.log(`   ✅ 出力方式: ${method}\n`);
 

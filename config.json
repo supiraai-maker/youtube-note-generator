@@ -1,5 +1,6 @@
 {
   "ffmpegPath": "C:/Users/110ry/ffmpeg/bin/ffmpeg.exe",
+  "ytDlpPath": "C:/Users/110ry/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe/yt-dlp.exe",
   "workDir": "work",
   "outputDir": "output",
   "frameFormat": "jpg",

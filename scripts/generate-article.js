@@ -29,10 +29,11 @@ function loadExamples(maxCount) {
  * Anthropic Claude API で note.com 記事を生成する
  * @param {object[]} chapters - parseDescriptionの出力
  * @param {object[]} frames - extractFramesの出力
+ * @param {string} transcript - YouTube字幕テキスト（空文字でも可）
  * @param {object} config - config.json の内容
  * @returns {string} - 生成されたMarkdown記事
  */
-async function generateArticle(chapters, frames, config) {
+async function generateArticle(chapters, frames, transcript, config) {
   const client = new Anthropic();
 
   const promptTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'article-prompt.txt'), 'utf-8');
@@ -56,9 +57,14 @@ async function generateArticle(chapters, frames, config) {
     ? examplesList.join('\n\n')
     : '（まだ承認済みの記事例がありません。初回生成後に --save-example で保存できます）';
 
+  const transcriptText = transcript
+    ? transcript
+    : '（字幕データなし。チャプタータイトルから内容を推測してください）';
+
   const prompt = promptTemplate
     .replace('{{CHAPTERS_LIST}}', chaptersList)
     .replace('{{CHAPTERS_DETAIL}}', chaptersDetail)
+    .replace('{{TRANSCRIPT}}', transcriptText)
     .replace('{{STYLE_GUIDE}}', styleGuide)
     .replace('{{EXAMPLES}}', examplesText);
 

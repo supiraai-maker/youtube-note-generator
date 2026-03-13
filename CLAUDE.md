@@ -17,6 +17,7 @@ c:/dev/claude/Youtube-note-generator/
 ├── scripts/
 │   ├── pipeline.js              # メインオーケストレーター
 │   ├── parse-description.js     # チャプター/タイムスタンプ解析
+│   ├── fetch-transcript.js      # yt-dlp でYouTube字幕取得
 │   ├── extract-frames.js        # FFmpegでフレーム抽出
 │   ├── generate-article.js      # Claude API で記事生成
 │   └── format-output.js         # クリップボード出力
@@ -24,7 +25,10 @@ c:/dev/claude/Youtube-note-generator/
 │   ├── article-prompt.txt       # 記事生成プロンプトテンプレート
 │   ├── style-guide.md           # note記事スタイルガイド
 │   └── examples/                # 承認済み記事例（few-shot学習用）
-├── work/                        # ここに description.txt + video.mp4 を置く
+├── work/                        # ここにファイルを置く
+│   ├── description.txt          # YouTube説明欄テキスト
+│   ├── url.txt                  # YouTube URL
+│   └── video.mp4                # 動画ファイル
 ├── output/                      # 生成結果（gitignore）
 ├── config.json                  # FFmpeg・モデル設定
 └── .env                         # ANTHROPIC_API_KEY
@@ -47,8 +51,9 @@ node scripts/pipeline.js --work-dir=path/to/folder
 
 ## 準備
 1. `work/description.txt` — YouTube の説明欄テキスト（チャプター・タイムスタンプ付き）
-2. `work/video.mp4` — アップロード済みの動画ファイル
-3. `.env` に `ANTHROPIC_API_KEY` を設定
+2. `work/url.txt` — YouTube の動画 URL（字幕取得に使用）
+3. `work/video.mp4` — アップロード済みの動画ファイル（フレーム抽出用）
+4. `.env` に `ANTHROPIC_API_KEY` を設定
 
 ---
 
