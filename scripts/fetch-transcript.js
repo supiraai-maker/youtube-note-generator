@@ -1,14 +1,12 @@
 'use strict';
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
 /**
  * VTT字幕ファイルをパースしてプレーンテキストに変換する
- * @param {string} vttContent - VTTファイルの内容
- * @returns {string} - クリーンなテキスト
  */
 function parseVtt(vttContent) {
   const lines = vttContent.split('\n');
@@ -17,14 +15,12 @@ function parseVtt(vttContent) {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // タイムスタンプ行・ヘッダー・空行・NOTE行をスキップ
     if (!trimmed) continue;
     if (trimmed === 'WEBVTT') continue;
     if (trimmed.startsWith('NOTE')) continue;
     if (/^\d{2}:\d{2}[:.]\d{2}/.test(trimmed)) continue;
     if (/^\d+$/.test(trimmed)) continue;
 
-    // HTMLタグを除去（<c>、<00:00:00.000>など）
     const clean = trimmed
       .replace(/<[^>]+>/g, '')
       .replace(/&amp;/g, '&')
@@ -33,7 +29,6 @@ function parseVtt(vttContent) {
       .trim();
 
     if (!clean) continue;
-    // 直前と同じ行（字幕の重複）はスキップ
     if (clean === prevLine) continue;
 
     textLines.push(clean);
@@ -44,41 +39,56 @@ function parseVtt(vttContent) {
 }
 
 /**
+ * 指定ミリ秒スリープする（同期）
+ */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
  * YouTubeから自動生成字幕をダウンロードしてテキストに変換する
- * @param {string} youtubeUrl - YouTubeのURL
- * @param {object} config - config.jsonの内容
- * @returns {string} - 字幕のプレーンテキスト
+ * 429エラー時は最大5回リトライ（60秒間隔）
  */
 function fetchTranscript(youtubeUrl, config) {
   const ytDlpPath = config.ytDlpPath || 'yt-dlp';
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yt-transcript-'));
+  const maxRetries = 5;
+  const retryDelayMs = 60000;
 
-  try {
-    // 自動生成字幕（ja）を優先、なければ en も試みる
-    execFileSync(ytDlpPath, [
-      '--write-auto-sub',
-      '--sub-lang', 'ja,ja-orig,en',
-      '--sub-format', 'vtt',
-      '--skip-download',
-      '--no-playlist',
-      '-o', path.join(tmpDir, 'transcript'),
-      youtubeUrl,
-    ], { stdio: 'pipe' });
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yt-transcript-'));
 
-    // ダウンロードされた vtt ファイルを探す
-    const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.vtt'));
-    if (files.length === 0) {
-      throw new Error('字幕が見つかりませんでした。YouTube上で自動字幕が生成されているか確認してください。');
+    try {
+      execFileSync(ytDlpPath, [
+        '--write-auto-sub',
+        '--sub-lang', 'ja,ja-orig,en',
+        '--sub-format', 'vtt',
+        '--skip-download',
+        '--no-playlist',
+        '--sleep-requests', '2',
+        '-o', path.join(tmpDir, 'transcript'),
+        youtubeUrl,
+      ], { stdio: 'pipe' });
+
+      const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.vtt'));
+      if (files.length === 0) {
+        throw new Error('字幕が見つかりませんでした。YouTube上で自動字幕が生成されているか確認してください。');
+      }
+
+      const jaFile = files.find(f => f.includes('.ja')) || files[0];
+      const vttContent = fs.readFileSync(path.join(tmpDir, jaFile), 'utf-8');
+      return parseVtt(vttContent);
+
+    } catch (err) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+
+      const is429 = err.message && err.message.includes('429');
+      if (is429 && attempt < maxRetries) {
+        console.warn(`   ⏳ レート制限 (429)。${retryDelayMs / 1000}秒後にリトライ（${attempt}/${maxRetries}）...`);
+        sleepSync(retryDelayMs);
+        continue;
+      }
+      throw err;
     }
-
-    // 日本語字幕を優先して選択
-    const jaFile = files.find(f => f.includes('.ja')) || files[0];
-    const vttContent = fs.readFileSync(path.join(tmpDir, jaFile), 'utf-8');
-    return parseVtt(vttContent);
-
-  } finally {
-    // 一時ファイルを削除
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -93,7 +103,7 @@ if (require.main === module) {
   try {
     const transcript = fetchTranscript(url, config);
     console.log('✅ 字幕取得成功:');
-    console.log(transcript.slice(0, 300) + '...');
+    console.log(transcript.slice(0, 500) + '...');
   } catch (e) {
     console.error('❌', e.message);
     process.exit(1);

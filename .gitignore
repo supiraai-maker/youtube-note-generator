@@ -1,7 +1,10 @@
 output/
-work/*.mp4
-work/*.mov
-work/*.avi
 .env
+.env.*
 node_modules/
 *.log
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav

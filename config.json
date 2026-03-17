@@ -5,8 +5,10 @@
   "outputDir": "output",
   "frameFormat": "jpg",
   "frameQuality": 2,
+  "frameOffsetSeconds": 15,
   "geminiModel": "gemini-2.5-flash",
   "maxExamplesInPrompt": 2,
   "maxExamplesStored": 10,
-  "base64SizeLimitMB": 3
+  "base64SizeLimitMB": 3,
+  "officialLineUrl": "https://lin.ee/XXXXXXX"
 }

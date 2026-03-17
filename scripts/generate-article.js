@@ -33,14 +33,14 @@ function loadExamples(maxCount) {
  * @param {object} config - config.json の内容
  * @returns {string} - 生成されたMarkdown記事
  */
-async function generateArticle(chapters, frames, transcript, config) {
+async function generateArticle(chapters, frames, transcript, config, youtubeUrl, videoTitle) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: config.geminiModel || 'gemini-2.5-flash',
     generationConfig: {
       temperature: 0.7,
       topP: 0.9,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 32768,
     },
   });
 
@@ -69,12 +69,18 @@ async function generateArticle(chapters, frames, transcript, config) {
     ? transcript
     : '（字幕データなし。チャプタータイトルから内容を推測してください）';
 
+  const lineUrl = config.officialLineUrl || '';
+
   const prompt = promptTemplate
     .replace('{{CHAPTERS_LIST}}', chaptersList)
     .replace('{{CHAPTERS_DETAIL}}', chaptersDetail)
     .replace('{{TRANSCRIPT}}', transcriptText)
     .replace('{{STYLE_GUIDE}}', styleGuide)
-    .replace('{{EXAMPLES}}', examplesText);
+    .replace('{{EXAMPLES}}', examplesText)
+    .replace('{{LINE_URL}}', lineUrl)
+    .replace('{{VIDEO_URL}}', youtubeUrl || '')
+    .replace('{{VIDEO_TITLE}}', videoTitle || '')
+    .replace('{{HAS_TRANSCRIPT}}', transcript ? 'yes' : 'no');
 
   console.log('  🤖 Gemini 2.5 Flash に記事生成を依頼中...');
 

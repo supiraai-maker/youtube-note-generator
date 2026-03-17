@@ -22,14 +22,16 @@ function extractFrames(chapters, videoPath, imagesDir, config) {
   }
 
   const results = [];
+  const frameOffset = config.frameOffsetSeconds ?? 5;
 
   for (const chapter of chapters) {
     const fileName = `chapter-${String(chapter.index).padStart(2, '0')}.${format}`;
     const imagePath = path.join(imagesDir, fileName);
+    const seekSeconds = Math.max(0, chapter.seconds + frameOffset);
 
     try {
       execFileSync(ffmpegPath, [
-        '-ss', String(chapter.seconds),
+        '-ss', String(seekSeconds),
         '-i', videoPath,
         '-vframes', '1',
         '-q:v', String(quality),
