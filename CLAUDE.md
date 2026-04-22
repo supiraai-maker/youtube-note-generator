@@ -17,9 +17,9 @@ c:/dev/claude/Youtube-note-generator/
 ├── scripts/
 │   ├── pipeline.js              # メインオーケストレーター
 │   ├── parse-description.js     # チャプター/タイムスタンプ解析
-│   ├── fetch-transcript.js      # yt-dlp でYouTube字幕取得
+│   ├── fetch-transcript.js      # 字幕取得（ローカルSRT優先 → yt-dlpフォールバック）
 │   ├── extract-frames.js        # FFmpegでフレーム抽出
-│   ├── generate-article.js      # Claude API で記事生成
+│   ├── generate-article.js      # Gemini API で記事生成（無料枠）
 │   └── format-output.js         # クリップボード出力
 ├── templates/
 │   ├── article-prompt.txt       # 記事生成プロンプトテンプレート
@@ -28,10 +28,11 @@ c:/dev/claude/Youtube-note-generator/
 ├── work/                        # ここにファイルを置く
 │   ├── description.txt          # YouTube説明欄テキスト
 │   ├── url.txt                  # YouTube URL
-│   └── video.mp4                # 動画ファイル
+│   ├── video.mp4                # 動画ファイル
+│   └── *.srt                    # （任意）字幕ファイル。あればyt-dlpより優先使用
 ├── output/                      # 生成結果（gitignore）
 ├── config.json                  # FFmpeg・モデル設定
-└── .env                         # ANTHROPIC_API_KEY
+└── .env                         # GEMINI_API_KEY
 ```
 
 ---
@@ -51,9 +52,10 @@ node scripts/pipeline.js --work-dir=path/to/folder
 
 ## 準備
 1. `work/description.txt` — YouTube の説明欄テキスト（チャプター・タイムスタンプ付き）
-2. `work/url.txt` — YouTube の動画 URL（字幕取得に使用）
+2. `work/url.txt` — YouTube の動画 URL（タイトル取得・記事内リンクに使用）
 3. `work/video.mp4` — アップロード済みの動画ファイル（フレーム抽出用）
-4. `.env` に `ANTHROPIC_API_KEY` を設定
+4. `work/*.srt` — （任意）字幕ファイル。あればyt-dlpでの取得をスキップ
+5. `.env` に `GEMINI_API_KEY` を設定
 
 ---
 
@@ -61,7 +63,8 @@ node scripts/pipeline.js --work-dir=path/to/folder
 
 | 役割 | 技術 |
 |------|------|
-| 記事生成 | Anthropic Claude API (claude-sonnet-4-6) |
+| 記事生成 | Google Gemini API (gemini-2.5-flash / 無料枠) |
+| 字幕取得 | ローカルSRT優先 / yt-dlp（フォールバック） |
 | フレーム抽出 | FFmpeg |
 | クリップボード | clipboardy |
 
@@ -90,7 +93,8 @@ node scripts/pipeline.js --work-dir=path/to/folder
 ```json
 {
   "ffmpegPath": "C:/Users/110ry/ffmpeg/bin/ffmpeg.exe",
-  "claudeModel": "claude-sonnet-4-6",
+  "ytDlpPath": "...",
+  "geminiModel": "gemini-2.5-flash",
   "maxExamplesInPrompt": 2,
   "maxExamplesStored": 10,
   "base64SizeLimitMB": 3
@@ -102,5 +106,5 @@ node scripts/pipeline.js --work-dir=path/to/folder
 ## 必要な環境変数（.env）
 
 ```
-ANTHROPIC_API_KEY=<Anthropic API キー>
+GEMINI_API_KEY=<Google AI Studio で取得した API キー>
 ```
