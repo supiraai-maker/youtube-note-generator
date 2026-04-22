@@ -33,16 +33,19 @@ function loadExamples(maxCount) {
  * @param {object} config - config.json の内容
  * @returns {string} - 生成されたMarkdown記事
  */
-async function generateArticle(chapters, frames, transcript, config, youtubeUrl, videoTitle) {
+async function generateArticle(chapters, frames, transcript, config, youtubeUrl, videoTitle, descriptionText) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({
-    model: config.geminiModel || 'gemini-2.5-flash',
+  const primaryModelName = config.geminiModel || 'gemini-2.5-flash';
+  const fallbackModelName = 'gemini-2.5-flash-lite';
+  const buildModel = (name) => genAI.getGenerativeModel({
+    model: name,
     generationConfig: {
       temperature: 0.7,
       topP: 0.9,
       maxOutputTokens: 32768,
     },
   });
+  const model = buildModel(primaryModelName);
 
   const promptTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'article-prompt.txt'), 'utf-8');
   const styleGuide = fs.readFileSync(path.join(TEMPLATES_DIR, 'style-guide.md'), 'utf-8');
@@ -71,9 +74,12 @@ async function generateArticle(chapters, frames, transcript, config, youtubeUrl,
 
   const lineUrl = config.officialLineUrl || '';
 
+  const descriptionField = descriptionText || '（説明欄データなし）';
+
   const prompt = promptTemplate
     .replace('{{CHAPTERS_LIST}}', chaptersList)
     .replace('{{CHAPTERS_DETAIL}}', chaptersDetail)
+    .replace('{{DESCRIPTION}}', descriptionField)
     .replace('{{TRANSCRIPT}}', transcriptText)
     .replace('{{STYLE_GUIDE}}', styleGuide)
     .replace('{{EXAMPLES}}', examplesText)
@@ -84,8 +90,29 @@ async function generateArticle(chapters, frames, transcript, config, youtubeUrl,
 
   console.log('  🤖 Gemini 2.5 Flash に記事生成を依頼中...');
 
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  const tryWithModel = async (m, label) => {
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await m.generateContent(prompt);
+        return result.response.text();
+      } catch (err) {
+        const msg = err.message || '';
+        const retriable = msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand') || msg.includes('429');
+        if (!retriable || attempt === maxRetries) throw err;
+        const waitSec = Math.min(40, 10 * attempt);
+        console.log(`  ⏳ ${label}混雑中（${attempt}/${maxRetries}回目失敗）。${waitSec}秒待って再試行...`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+      }
+    }
+  };
+
+  try {
+    return await tryWithModel(model, primaryModelName);
+  } catch (err) {
+    console.log(`  🔄 ${primaryModelName} 継続失敗。${fallbackModelName} に切り替えて再試行...`);
+    return await tryWithModel(buildModel(fallbackModelName), fallbackModelName);
+  }
 }
 
 module.exports = { generateArticle };

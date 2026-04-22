@@ -6,6 +6,50 @@ const path = require('path');
 const os = require('os');
 
 /**
+ * SRT字幕ファイルをパースしてプレーンテキストに変換する
+ */
+function parseSrt(srtContent) {
+  const lines = srtContent.split('\n');
+  const textLines = [];
+  let prevLine = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // 連番行をスキップ
+    if (/^\d+$/.test(trimmed)) continue;
+    // タイムスタンプ行をスキップ（00:01:23,456 --> 00:01:25,789）
+    if (/^\d{2}:\d{2}:\d{2},\d{3}\s*-->/.test(trimmed)) continue;
+
+    const clean = trimmed
+      .replace(/<[^>]+>/g, '')
+      .replace(/\{[^}]+\}/g, '')
+      .trim();
+
+    if (!clean) continue;
+    if (clean === prevLine) continue;
+
+    textLines.push(clean);
+    prevLine = clean;
+  }
+
+  return textLines.join(' ');
+}
+
+/**
+ * workフォルダ内のSRTファイルを読み込んでテキストに変換する
+ * SRTがなければnullを返す
+ */
+function loadLocalSubtitle(workDir) {
+  const srtFiles = fs.readdirSync(workDir).filter(f => f.toLowerCase().endsWith('.srt'));
+  if (srtFiles.length === 0) return null;
+
+  const srtPath = path.join(workDir, srtFiles[0]);
+  const srtContent = fs.readFileSync(srtPath, 'utf-8');
+  return { text: parseSrt(srtContent), fileName: srtFiles[0] };
+}
+
+/**
  * VTT字幕ファイルをパースしてプレーンテキストに変換する
  */
 function parseVtt(vttContent) {
@@ -60,7 +104,7 @@ function fetchTranscript(youtubeUrl, config) {
     try {
       execFileSync(ytDlpPath, [
         '--write-auto-sub',
-        '--sub-lang', 'ja,ja-orig,en',
+        '--sub-lang', 'ja,ja-orig',
         '--sub-format', 'vtt',
         '--skip-download',
         '--no-playlist',
@@ -110,4 +154,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { fetchTranscript };
+module.exports = { fetchTranscript, loadLocalSubtitle };

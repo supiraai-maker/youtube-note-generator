@@ -7,7 +7,7 @@ const path = require('path');
 
 const { execFileSync } = require('child_process');
 const { parseDescription } = require('./parse-description');
-const { fetchTranscript } = require('./fetch-transcript');
+const { fetchTranscript, loadLocalSubtitle } = require('./fetch-transcript');
 const { extractFrames } = require('./extract-frames');
 const { generateArticle } = require('./generate-article');
 const { formatOutput } = require('./format-output');
@@ -22,7 +22,10 @@ function toShareUrl(url) {
     if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
       return `https://youtu.be/${parsed.searchParams.get('v')}`;
     }
-    // 既にyoutu.be形式ならそのまま（siパラメータは残す）
+    // youtu.be形式の場合、siパラメータを除去（429エラーの原因になるため）
+    if (parsed.hostname === 'youtu.be') {
+      return `https://youtu.be${parsed.pathname}`;
+    }
     return url;
   } catch {
     return url;
@@ -116,6 +119,7 @@ async function main() {
   }
   console.log(`   🎥 動画ファイル: ${path.basename(videoPath)}`);
 
+  const descriptionText = fs.readFileSync(descriptionPath, 'utf-8');
   const rawUrl = fs.readFileSync(urlPath, 'utf-8').trim();
   // YouTube URLを共有用形式（youtu.be）に変換（note.comで埋め込み表示されるため）
   const youtubeUrl = toShareUrl(rawUrl);
@@ -135,15 +139,24 @@ async function main() {
   const chapters = parseDescription(descriptionPath);
   console.log(`   ✅ ${chapters.length}件のチャプターを検出\n`);
 
-  // Step 2: 字幕取得
-  console.log('📝 Step 2: YouTube字幕取得（yt-dlp）...');
+  // Step 2: 字幕取得（ローカルSRT優先 → なければYouTubeから取得）
+  console.log('📝 Step 2: 字幕取得...');
   let transcript = '';
-  try {
-    transcript = fetchTranscript(youtubeUrl, config);
-    console.log(`   ✅ 字幕取得完了（${transcript.length}文字）\n`);
-  } catch (err) {
-    console.warn(`   ⚠️  字幕取得失敗: ${err.message}`);
-    console.warn('   → チャプタータイトルのみで記事を生成します\n');
+  const localSub = loadLocalSubtitle(workDir);
+  if (localSub) {
+    transcript = localSub.text;
+    console.log(`   ✅ ローカル字幕ファイル使用: ${localSub.fileName}（${transcript.length}文字）\n`);
+  } else {
+    console.log('   📡 ローカル字幕なし → YouTubeから取得（yt-dlp）...');
+    try {
+      transcript = fetchTranscript(youtubeUrl, config);
+      console.log(`   ✅ 字幕取得完了（${transcript.length}文字）\n`);
+    } catch (err) {
+      console.error(`   ❌ 字幕取得失敗: ${err.message}`);
+      console.error('   → 字幕がないと正確な記事を生成できないため、処理を中止します。');
+      console.error('   → しばらく時間を置いてから再実行してください（YouTubeのレート制限の可能性があります）。');
+      process.exit(1);
+    }
   }
 
   // Step 3: フレーム抽出
@@ -158,8 +171,8 @@ async function main() {
   console.log(`   ✅ ${successCount}/${chapters.length}件のフレームを抽出\n`);
 
   // Step 4: 記事生成
-  console.log('✍️  Step 4: 記事生成（Claude API）...');
-  const articleMd = await generateArticle(chapters, frames, transcript, config, youtubeUrl, videoTitle);
+  console.log('✍️  Step 4: 記事生成（Gemini API）...');
+  const articleMd = await generateArticle(chapters, frames, transcript, config, youtubeUrl, videoTitle, descriptionText);
   console.log('   ✅ 記事生成完了\n');
 
   // Step 5: 出力フォーマット & クリップボード
